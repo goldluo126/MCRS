@@ -1,2 +1,3 @@
 # MCRS
-a quant trading system 
+
+A quant trading system based on A-share markets.
