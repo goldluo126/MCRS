@@ -1,8 +1,9 @@
 # MCRS SFL 验证规格书 v13.0 — QUALIFIED CANDIDATE（审查宪法版）
 
 文档状态：`SPEC / PRE-REGISTERED EXPERIMENT / QUALIFIED CANDIDATE`
-版本：`v13.0`（以 v12.1 为基的**增量修订**（非重写）；完全自包含单文件、零回引；替代 v1-v12.1。本版三项任务：①冻结合格标准为审查宪法（§-1）②关闭 C1 残余（图形序贯唯一算法，§1.2）③补 C5 十项表（§1.4）+ 验收协议（§16）与非阻断登记簿（§17）。C2/C3/C4 经核实已由 v12.1 关闭，本版确认保留）
+版本：`v13.0.1`（Errata 就地修订：修复第十五轮裁定的 4 项 A 类 + 1 项 B 类阻断与 Gate0-Z 补丁——①删除两处回引并物理内嵌 13 项验证指标与全量冻结表 ②H-Z2b 正式投资集合唯一化 ③CVaR 护栏定义 ④Bootstrap 阶梯矛盾 ⑤α_spent 每次开庭更新 + 路径条件错误率 ⑥Gate0-Z 通过条件。不改任何点火/确认/ZJ/交易理论。基版 v13.0 说明：冻结审查宪法（§-1）、关闭 C1（§1.2）与 C5（§1.4）、验收协议（§16）、登记簿（§17）；C2/C3/C4 由 v12.1 关闭）
 起草日期：`2026-07-16`
+**项目状态（第十五轮裁定）**：GO_FOR_IMPLEMENTATION=TRUE｜GO_FOR_DATA_COLLECTION=TRUE｜GO_FOR_DUAL_AGENT_ACCEPTANCE=本 Errata 生效后｜QUALIFIED_SPEC=FALSE（待 §16 验收）｜FREEZE_APPROVED=FALSE｜FORMAL_SHADOW_START=FALSE
 可编译性标准：两个独立 Agent 依据本文 + RESOLVED_CONFIG + §13 环境产生逐日完全相同的**正式输出**（定义见 §-1）。`D+k` 均为交易日。
 
 ---
@@ -48,18 +49,25 @@ Bretz 更新（拒绝 j）: α_i ← α_i + α_j·g_ji；g_ik ← (g_ik+g_ij·g_
 ```
 节点状态: State_i = ( α_granted, α_spent, I_done, look_schedule, boundary_table, status )
   status ∈ {locked, active, rejected_pending_guard, full_pass, guard_failed, retired}
-α_spent 定义 = 在 H0(θ=MES_i) 下、按**已执行各次开庭的实际边界**计算的累计拒绝概率
-  （由边界引擎在冻结种子下输出，确定性数值）
-边界引擎（唯一算法载体，冻结代码+冻结种子 → 同输入同输出）:
-  输入 (α_granted, α_spent, 剩余 look 信息比例表, MES_i, σ̂_blind, 时钟类型)
-  输出 剩余各 look 的名义临界值 c_k（OBF 型形状），满足条件错误率口径:
-    P_H0( 在剩余任一 look 拒绝 | 迄今未拒绝 ) = (α_granted − α_spent) / (1 − α_spent)
+α_spent 定义（**Errata：与拒绝与否无关**）= 在 H0(θ=MES_i) 下、按已执行各次开庭的实际
+  边界计算的累计拒绝概率——**每次有效开庭结束后无条件更新**（未拒绝的开庭同样消耗
+  type-I error；由边界引擎在冻结种子下输出，确定性数值）
+边界引擎（唯一算法载体，冻结代码+冻结种子 → 同输入同输出；**方案 A 路径条件错误率**）:
+  输入 (α_granted, α_spent, 剩余 look 信息比例表, MES_i, σ̂_blind, 时钟类型,
+       **current_test_statistic, current_information_fraction, executed_boundaries**)
+  输出 剩余各 look 的名义临界值 c_k（OBF 型形状），满足**总量约束**:
+    P_H0( 已执行 look 按实际边界拒绝 ) + P_H0( 剩余任一 look 按新边界拒绝 | F_current )
+      × P_H0( 到达 F_current ) 的无条件合计 ≤ α_granted
+    —— 即从当前 filtration 状态（含当前统计量位置）向前模拟剩余路径求解 c_k，
+    保证节点全程无条件拒绝概率不超过 α_granted；已执行 look 的裁决永不重算
 事件处理（全部事件按日终顺序执行；同日多事件按节点名字典序）:
 E1 开庭(look k):
   SMD 整体检查失败 → 该 look 从 schedule 永久移除（不花费 α；边界引擎下次重生成时
     以"少一次开庭"处理）
   否则: 计算 repeated p（§9.2 移位零假设 bootstrap、自适应 B）；p ≤ c_k → status=
-    rejected_pending_guard；α_spent 更新为含本次 look 的累计值
+    rejected_pending_guard；**无论是否拒绝，α_spent 与 filtration 状态
+    （current_test_statistic, current_information_fraction）均于本次 look 结束时更新**
+    （Errata B 类修复：未拒绝的开庭同样入账，杜绝 α 重复使用）
 E2 收到转移 α（数量 δ）:
   α_granted += δ；调用边界引擎重生成剩余 look 边界（输入含更新后 α_granted 与既有
     α_spent）——**转入 α 仅经由"剩余 look 边界"生效，已执行 look 的裁决永不重算**；
@@ -73,7 +81,7 @@ FAIL 侧: economic-FAIL = 序贯兼容单侧 1−β_r 上界（§9.3）< MES，�
 ```
 
 ### 1.3 full-pass 护栏
-P1a 护栏：MDD_C−MDD_I ≤2pp ∧ CVaR_C 不劣（点估计）。Z2b 护栏：capacity_liquidation_failure 占 T 臂事件 ≤20%。科学节点无附加护栏。仅 full_pass 传播 α 并解锁 Gate；guard_failed 的 α 退役。
+**P1a 护栏（Errata 定义 CVaR）**：MDD_C−MDD_I ≤2pp ∧ **ES95 损失口径不劣**——CVaR 冻结为日收益**损失**分布（loss=−r）的 95% Expected Shortfall，用正式影子期全部日收益的点估计；通过条件 = ES95_C ≤ ES95_I（损失口径下数值越小越好，无方向歧义）。Z2b 护栏：capacity_liquidation_failure 占 T 臂事件 ≤20%。科学节点无附加护栏。仅 full_pass 传播 α 并解锁 Gate；guard_failed 的 α 退役。
 
 ### 1.4 正式节点十项表（v13 关闭 C5 汇总缺口）
 
@@ -131,10 +139,21 @@ E3（口径 1 纯延迟；口径 2 共同终点财富机会成本）
 ```
 
 ## 5. 条件本体零模型（C4 已闭确认）
-候选边 candidate_edge(i←j) = 同 donor 层 ∧ **无共同合格题材标签（块起点，[8,100] 带内未排除题材）** ∧ i≠j ∧ 投影可行（预计算，distance>5% 删边）；self-edge 独立例外。donor 层（板块×市值3×股性3×行业×块起点波动3×动量3；层 ≥8；粗化序①动量②波动③股性④市值；全粗化仍<8 → 该层全体 self-edge 计入 unswapped）。三阶段完美指派（①指派空间 min self-edge ②固定 S* min ΣFeatureDistance[五维 donor 层当块标准化、样本 SD、零方差删维√d、等权、缺失退出、int64×10⁶] ③ID 迭代固定）。路径向量 {O/H/L/C/VWAP 相对 PrevClose, Volume/ADVVol, 停牌旗标}，Amount 派生；投影七步序；块 20 日（敏感 10/40、随机起点、circular）；bijection；unswapped ≤20% ∧ 高题材度 ≤1.5×。验证套件 13 指标（KS/相对误差表沿 v12）；GENERATOR_FAIL → live 路线须在 Stage-B 数据上重过全套件，否则年度零模型不可用。α_day：网格 {0.2,0.4,0.6,0.8,1.2}%（K=5）、合成年 ≥400 对半、验证半 simultaneous UCB（1−0.05/(2K)）取最大 α、禁插值、无解上报。双预算：触发 t-UCB≤2（半宽 ≤0.3）；FalseCapitalDays boot-UCB≤40（相对 ≤15%）；资本政策对象 = Policy C 账本；漏斗全表。
+候选边 candidate_edge(i←j) = 同 donor 层 ∧ **无共同合格题材标签（块起点，[8,100] 带内未排除题材）** ∧ i≠j ∧ 投影可行（预计算，distance>5% 删边）；self-edge 独立例外。donor 层（板块×市值3×股性3×行业×块起点波动3×动量3；层 ≥8；粗化序①动量②波动③股性④市值；全粗化仍<8 → 该层全体 self-edge 计入 unswapped）。三阶段完美指派（①指派空间 min self-edge ②固定 S* min ΣFeatureDistance[五维 donor 层当块标准化、样本 SD、零方差删维√d、等权、缺失退出、int64×10⁶] ③ID 迭代固定）。路径向量 {O/H/L/C/VWAP 相对 PrevClose, Volume/ADVVol, 停牌旗标}，Amount 派生；投影七步序；块 20 日（敏感 10/40、随机起点、circular）；bijection；unswapped ≤20% ∧ 高题材度 ≤1.5×。**验证套件 13 指标（Errata 物理内嵌，容差冻结，于生成器验证年上执行）**：①日涨停数分布 KS ≤0.05 ②连板高度 P50/P90/P99 相对误差 ≤10% ③ADV 中位数与 P90 相对误差 ≤10% ④行业日收益相关矩阵 ||Δ||_F/N ≤0.05 ⑤全市场日总成交额分布 KS ≤0.05 ⑥其一阶自相关误差 ≤0.10 ⑦题材成交份额分布 KS ≤0.05 ⑧CrowdPctl 分布 KS ≤0.05 ⑨行业内同日涨停数分布 KS ≤0.10 ⑩行业共同触板数分布 KS ≤0.10 ⑪行业涨停集中度 HHI 相对误差 ≤15% ⑫行业收益上尾共现率（>95 分位）相对误差 ≤15% ⑬行业成交冲击日共放大率相对误差 ≤15%；牛市年与熊市年分别达标；任一失败 → GENERATOR_FAIL → live 路线须在 Stage-B 数据上重过全套 13 项，否则年度零模型不可用、正式影子不能开。α_day：网格 {0.2,0.4,0.6,0.8,1.2}%（K=5）、合成年 ≥400 对半、验证半 simultaneous UCB（1−0.05/(2K)）取最大 α、禁插值、无解上报。双预算：触发 t-UCB≤2（半宽 ≤0.3）；FalseCapitalDays boot-UCB≤40（相对 ≤15%）；资本政策对象 = Policy C 账本；漏斗全表。
 
 ## 6. 载体 ZJ 与第二法庭
-容量 ADV20@D0≥3.33e8 ∧ 市值 ≥5e9；纯度 D0−1 在籍 ≥20 日；参与 [Π(1+r_i)−Π(1+r_基)]>0 ∧ mean 换手(D0..D0+4)≥1.2×mean(D0−20..D0−1)；护栏 D0+4 非涨停 ∧ 封板 ≤1 ∧ 累涨<40%；可买 GapLimitRatio=(Open_{D0+5}/Close_{D0+4}−1)/UpLimitPct≤0.70；EventAmountShock=mean(Amount,D0..D0+4)/mean(D0−20..D0−1) 前 2、替补至 4、半仓。H-Z3：Top2Mean−RestOfPoolMean（D0+5 VWAP→D0+14 收盘，成本买 12.5bp/卖 17.5bp）；池 ≥4；两向推断；n_Z3 独立。H-Z2b：estimand=Mean(R_e(T)−R_e(A)) 配对差；B_e=AUM/6=3333.33 万（AUM=2e8）；买 D0+5..D0+7；清算 D0+15..D0+20；haircut=max(2%,10%×残余市值/ADV20@D0+20) 上限 20%；失败率护栏 ≤20%。描述性：池平均口径、C0、N（RS20 截止 D0+4）。
+容量 ADV20@D0≥3.33e8 ∧ 市值 ≥5e9；纯度 D0−1 在籍 ≥20 日；参与 [Π(1+r_i)−Π(1+r_基)]>0 ∧ mean 换手(D0..D0+4)≥1.2×mean(D0−20..D0−1)；护栏 D0+4 非涨停 ∧ 封板 ≤1 ∧ 累涨<40%；可买 GapLimitRatio=(Open_{D0+5}/Close_{D0+4}−1)/UpLimitPct≤0.70；EventAmountShock=mean(Amount,D0..D0+4)/mean(D0−20..D0−1) 前 2、替补至 4、半仓。H-Z3：Top2Mean−RestOfPoolMean（D0+5 VWAP→D0+14 收盘，成本买 12.5bp/卖 17.5bp）；池 ≥4；两向推断；n_Z3 独立。**H-Z2b（Errata 唯一化）**：
+```
+Z2bInstrumentSet(E, D0) = EpisodeBaseSet ∩ ADV20@D0 ≥ 1e8 元 ∩ 非ST/非停牌@D0 ∩ 上市≥60日
+  （冻结为 1 亿元容量子集口径——与 §1.4 Population 一致；ZJ 的 3.33 亿口径不适用于本节点）
+T 臂 = 处理 Episode 自己的 Z2bInstrumentSet；A 臂 = 匹配对照题材自己的 Z2bInstrumentSet
+  （伪时钟继承 (D0, D0+5..D0+20)）；两臂各自独立施加执行日可买性与 5% 参与率
+estimand = Mean( R_e(T) − R_e(A) )；B_e = AUM/6 = 3333.33 万元（两臂同额）；
+买入 D0+5..D0+7；清算 D0+15..D0+20；haircut = max(2%, 10%×残余市值/ADV20@D0+20) 上限 20%
+任一臂 InstrumentSet 为空 → 该配对退出 H-Z2b 并记 z2b_pair_excluded（占比必报）
+失败率护栏 ≤20%（capacity_liquidation_failure 占 T 臂事件）
+```
+描述性：池平均口径、C0、N（RS20 截止 D0+4）。
 
 ## 7. 四级法庭
 **7.1**：匹配（分阶段最优①max 匹配②min 距离③ID 固定；4 协变量 @[D0−20,D0−1] pre-assignment 风险集标准化；卡尺 1.0；Jaccard<0.2；重叠 ≤20%；同日无放回跨日复用；unmatched→registry）；SMD 十变量 ≤0.10 一次判定、序贯 look 失败永久取消；fallback tree（卡尺 1.5 一次→MATCH_INFEASIBLE；ZJ 池<30%→Z3 预判 INCONCLUSIVE；频率 ∉[10,150]→停止；SMD 失败→上报）；科学口径（total-return ledger、零删除、退市三级、起始等权买入持有、ITT 主/PP 副、判词全条件复述）。
@@ -143,10 +162,11 @@ E3（口径 1 纯延迟；口径 2 共同终点财富机会成本）
 **7.4**：一字 = 价格==涨/跌停价；净额化 5% 参与；Decision-to-VWAP slippage；容量 1/3/5%；动态暴露基准（容量等权指数月度再平衡、同成本模型双口径）；判决量 252×mean；两因子归因；H-Z1 决策函数（晋级 = 点估计 ≥3%∧80% 下界>0∧MDD≤5pp；关线 = 点估计<0∨95% 上界<3%；INCONCLUSIVE→唯一自动延长 125 日一次[点估计 ≥2%∧80% 下界>−1%]→终判）。
 
 ## 8. 安慰剂
-P3（同日风险集；精确匹配 {STATE_D, 涨停数三分位}+连续 4 维 {dormant_high_count_20, CrowdPctl, ln 成员数, 前 20 日收益}；分阶段指派；卡尺 1.0；ITT 主口径）；P4（簇独立循环位移避 Episode 窗∧活跃度匹配）；双层重采样外层 ≥2000、内层 1 轮；通过线 = 四 endpoint 各自外层 95% CI ⊂ [−0.1,+0.1]d ∧ [−3bp,+3bp]；d=Mean/SD(配对差)（原样本 SD；SD<5bp 降绝对）；Gate0-F 锁 Gate1、Gate0-Z 锁 Z3；通过率进 OC。
+P3（同日风险集；精确匹配 {STATE_D, 涨停数三分位}+连续 4 维 {dormant_high_count_20, CrowdPctl, ln 成员数, 前 20 日收益}；分阶段指派；卡尺 1.0；ITT 主口径）；P4（簇独立循环位移避 Episode 窗∧活跃度匹配）；双层重采样外层 ≥2000、内层 1 轮；通过线 = 四 endpoint 各自外层 95% CI ⊂ [−0.1,+0.1]d ∧ [−3bp,+3bp]；d=Mean/SD(配对差)（原样本 SD；SD<5bp 降绝对）；Gate0-F 锁 Gate1；通过率进 OC。
+**Gate0-Z 通过条件（Errata 唯一化）**：以下四项单测全部通过 iff Gate0-Z PASS——①B 臂解析等价单测（池等权 == 全 2-组合均值，数值验证）②Top2−Rest 计算单测（构造已知答案池）③池大小边界单测（池 =3/4/1/0 各分支）④ZJ 可买池一致性单测（T 与 B 同池断言）；任一失败 → Z3 永久 locked（修复须走版本升级）。
 
 ## 9. 分法庭主推断
-**9.1** H-Z2 族/Z3：配对差 + 两向交叉重采样 bootstrap（第一维 = 处理-对照 lineage 二部图连通分量；第二维 = 20 日入场块；空交集重抽 ≤100；任一维簇<10 → INCONCLUSIVE 标记）；P1a/H-Z1/Z6：日历 spread + stationary bootstrap（块 20；Z6 块 60）+NW。**9.2** 正式 p 值 = 移位零假设 bootstrap：p=(1+#{θ̂*_b−θ̂ ≥ θ̂−MES})/(B+1)；自适应 B ≥100/α_i（阶梯 5k→20k→100k）；Clopper-Pearson 上界 ≤ 边界才拒绝；repeated p 由边界引擎产出。**9.3** FAIL 上界 = stagewise-ordering 序贯兼容构造（边界仿真在"未提前 PASS"条件路径上校准）；固定样本上界仅描述性。seed=SHA-256('inference'‖hypothesis‖spec)；40 日块敏感性；状态覆盖 n≥10∧≥15%；频率闸门 [10,150]。
+**9.1** H-Z2 族/Z3：配对差 + 两向交叉重采样 bootstrap（第一维 = 处理-对照 lineage 二部图连通分量；第二维 = 20 日入场块；空交集重抽 ≤100；任一维簇<10 → INCONCLUSIVE 标记）；P1a/H-Z1/Z6：日历 spread + stationary bootstrap（块 20；Z6 块 60）+NW。**9.2** 正式 p 值 = 移位零假设 bootstrap：p=(1+#{θ̂*_b−θ̂ ≥ θ̂−MES})/(B+1)。**自适应 B（Errata 消除矛盾）**：阶梯 5k→20k→100k→250k→500k→1M；硬约束 B ≥ ⌈100/当前 local α_i⌉（regime 3 中心节点 α=0.0005 → B≥200k，落在 250k 档）；Clopper-Pearson 95% 上界须明确位于边界一侧才允许拒绝；**升至 1M 仍不可分辨 → 本 look 判 INCONCLUSIVE、不得拒绝**；repeated p 由边界引擎产出。**9.3** FAIL 上界 = stagewise-ordering 序贯兼容构造（边界仿真在"未提前 PASS"条件路径上校准）；固定样本上界仅描述性。seed=SHA-256('inference'‖hypothesis‖spec)；40 日块敏感性；状态覆盖 n≥10∧≥15%；频率闸门 [10,150]。
 
 ## 10. 序贯法庭与 OC
 各节点自身信息比例 {1/3,2/3,1}；终期分量条件（§1.2）；封存-启封；SMD 取消制。边界仿真联合产出（完整图机制 + 生命周期全项）并在混合真假配置族（全 null/全真/各单真/灰区 ×4/Gate2 半真/护栏失败）逐配置验证 P(错误经济 full-pass)≤α_r ∧ P(错误死亡)≤β_r；效应五情景；四时钟；P(3/5/8 年) 三原点。
@@ -165,8 +185,30 @@ Stage-E（≥60 日可延长；10 日时间块 ≥6；双层 cluster bootstrap�
 ## 13. 可复现性环境
 SHA-256 / UTF-8 / canonical JSON / PCG64DXSM / little-endian int64 / IEEE-754 float64 / 稳定 mergesort（ID 序）/ 固定归约序 / 溢出断言。联合哈希包 = {SPEC, RESOLVED_CONFIG, 代码 commit, requirements.lock, 镜像摘要, BLAS, schema 版本, regime_id, 生成器验证报告, Phase-I 分状态基线, outcome ledger 根哈希}。
 
-## 14. 冻结参数总表
-（v12.1 §14 全表继续有效；v13 增量：§-1 宪法、§1.2 节点状态机与边界引擎口径、§1.4 十项表、§16 验收协议、§17 登记簿。）
+## 14. 冻结参数总表（Errata 物理内嵌全量）
+
+| 域 | 值 |
+|---|---|
+| 宪法 | §-1 两标准/A-B 阻断/终止规则/三登记簿/验收程序 |
+| 图形序贯 | 信息比例 {1/3,2/3,1}；边界引擎路径条件错误率口径（§1.2）；α_spent 每次开庭更新；转入 α 仅经剩余边界；n_table=f(α,MES,σ̂)；n=max(n_PASS@α_min, n_FAIL@β_r)；SMD 失败该次取消 |
+| full-pass | 统计拒绝 ∧ 护栏（P1a: MDD≤2pp ∧ ES95 损失口径不劣；Z2b: 清算失败 ≤20%）；guard_failed α 退役 |
+| 终期 | 分量条件；TerminalDate=已解锁节点完成日最大；未解锁不拖延 |
+| minP | MarginalUniverse/FWERFamily 分离；分层五维层 ≥8 粗化序冻结；B=2000 临界带全族 20000；点火 LU≥2∧p_FWER≤α_day |
+| 生命周期 | regime ≤3；α 0.03/0.015/0.005；β 0.015/0.0075/0.0025；Research ≤6 年；Wall ≤8 年 |
+| 运输 | 候选边（同层∧无共同合格题材标签∧i≠j∧投影可行）；三阶段完美指派；FeatureDistance 五维；层全粗化<8 → 全 self-edge；unswapped ≤20%∧高题材度 ≤1.5×；块 20（敏感 10/40） |
+| 单位 | price=元/股、volume=股、amount=元、turnover=小数、mcap=元（摄入层一次换算） |
+| 预算 | 触发 t-UCB≤2（半宽 ≤0.3）；FalseCapitalDays boot-UCB≤40（相对 ≤15%）；α 网格 {0.2,0.4,0.6,0.8,1.2}% K=5；合成年 ≥400 对半；simultaneous UCB 1−0.05/(2K) 取最大 α；资本政策对象 = Policy C 账本 |
+| 状态机 | DORMANT 20 日 CoordState≥2 ≤1 天 ∧ Crowd<0.80 三级；确认 landmark D0+4；入场 D0+5/信号 D0+14/执行 D0+15；SignalEnd 成 14/败 4；冷却 20 |
+| ZJ/Z2b | ADV≥3.33e8∧市值 ≥5e9；在籍 ≥20 日；EventAmountShock 前 2；H-Z3=Top2−Rest（池 ≥4，MES 20bp）；Z2bInstrumentSet 见 §6（ADV≥1e8 口径）；haircut=max(2%,10%×残余/ADV20@D0+20) 上限 20%；失败率护栏 20% |
+| 匹配 | 分阶段最优；4 协变量卡尺 1.0；SMD 十变量 ≤0.10；同日无放回跨日复用；风险集标准化 |
+| 政策 | 槽位 =6 全占用；预算接纳日锁定；买入截止+2；单股 ≤NAV/12；卖出次日可用；现金 0；ID 序优先 |
+| 安慰剂 | Gate0-F 四 endpoint 等效 ⊂[−0.1,0.1]d∧[−3bp,3bp]；外层 ≥2000；SD<5bp 降绝对；Gate0-Z 四单测（§8） |
+| 推断 | 移位零假设 bootstrap p；B 阶梯 5k→1M ∧ B≥⌈100/α⌉；序贯兼容 FAIL 上界；连通分量 × 20 日块两向；P1a/Z1 stationary 块 20、Z6 块 60 |
+| Run-in | Stage-E ≥60 日、10 日块 ≥6、分指标阈值（0.5pp/3pp/5pp）；Stage-B ≥250 日 |
+| 漂移/审计 | 分状态 Phase-I 基线；EWMA λ=0.2 连续两月；P(5 年误 reset)≤10%；审计 250 日窗 ×200、t-UCB≤3.0/boot-UCB≤60 |
+| 基准/H-Z1 | 动态暴露基准月度再平衡同成本双口径；252×mean；决策函数 + 唯一延长 125 日 |
+| OC | 混合配置（含灰区 ×4、护栏失败）；四时钟；P(3/5/8 年) 三原点 |
+| 环境 | §13 全清单 |
 
 ## 15. 给验证 Agent 的交代要点
 1. 唯一真相源（零回引，缺口即停）；2. 断言集：MarginalUniverse/FWERFamily 分离、候选边题材零重叠、转入 α 仅未来（构造转移序列对照边界引擎手算）、canonical 单位、订单生命周期、p 值移位中心化、n_table 查找、指派反例 S*=2、minP vs 枚举、时间轴、B 臂代数、SD 地板、ledger 不可变、**§16 八哈希表生成器**；3. 全部登记簿入库；4. 闸门 flag 阻断；影子期改规则 = 作废。
@@ -205,6 +247,7 @@ C1 图形序贯唯一算法 → §1.2 节点状态机 + 边界引擎口径（**�
 1. 审查宪法（§-1）由外部审查方起草、项目所有者确认、本版冻结——自此审查采用终止规则而非无限深挖模式；
 2. 时序说明：五阻断项针对 v12.0 提出；v12.1（依据同轮 20 红线）已实质关闭 C2/C3/C4 与 C5 大部——v13 的净新增 = C1 状态机、C5 十项表、宪法、验收协议、登记簿；
 3. 历轮"更优方法"类建议已归档 §17，不再构成阻断；
-4. 下一步 = §16 验收（双 Agent 哈希 + 统计压力测试），通过即 QUALIFIED / FREEZE APPROVED，随后进入实现与前瞻数据阶段。
+4. 下一步 = §16 验收（双 Agent 哈希 + 统计压力测试），通过即 QUALIFIED / FREEZE APPROVED，随后进入实现与前瞻数据阶段；
+5. **v13.0.1 Errata 留痕**（第十五轮裁定，4A+1B+1 补丁）：①回引清零（13 项验证指标与全量冻结表物理内嵌——同一模式第四次出现后终于闭合，"零回引"自此可 grep 验证）②Z2bInstrumentSet 冻结为 1 亿元容量口径（设计权选择：与 §1.4 Population 及 InstrumentSet 家族一致；3.33 亿是 ZJ 交易系统门槛，非本节点口径）③CVaR=ES95 损失口径（消除"不劣"方向歧义）④B 阶梯扩至 1M ∧ B≥⌈100/α⌉ ∧ 不可分辨判 INCONCLUSIVE ⑤α_spent 每次开庭无条件更新 + 边界引擎接收 filtration 状态（B 类统计硬错误：未拒绝的开庭同样消耗 type-I error）⑥Gate0-Z 四单测通过条件。项目状态旗标见文首。
 
 *登记时间：2026-07-16。冻结对象：全文（含 §-1 宪法）。变更 = v13.x = 新试验。签署对象 = §12 步骤 8 联合哈希包。*
